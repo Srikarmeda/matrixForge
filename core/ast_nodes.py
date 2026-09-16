@@ -1,50 +1,59 @@
 # core/ast_nodes.py
+from dataclasses import dataclass
+from typing import List, Union
 
 class ASTNode:
-    """Base class for all AST nodes."""
+    """Base class for all Abstract Syntax Tree nodes."""
     pass
 
+@dataclass
 class Program(ASTNode):
-    def __init__(self, statements):
-        self.statements = statements
-    def __repr__(self):
-        return f"Program({self.statements})"
+    statements: List[ASTNode]
+    lineno: int = 1
+    lexpos: int = 0
 
+@dataclass
 class Assignment(ASTNode):
-    def __init__(self, target, value):
-        self.target = target
-        self.value = value
-    def __repr__(self):
-        return f"Assign({self.target} = {self.value})"
+    target: 'Identifier'
+    value: ASTNode
+    lineno: int = 1
+    lexpos: int = 0
 
+@dataclass
 class PrintStmt(ASTNode):
-    def __init__(self, expression):
-        self.expression = expression
-    def __repr__(self):
-        return f"Print({self.expression})"
+    expression: ASTNode
+    lineno: int = 1
+    lexpos: int = 0
 
-class MatrixLiteral(ASTNode):
-    def __init__(self, rows):
-        self.rows = rows  # List of lists
-    def __repr__(self):
-        return f"Matrix({self.rows})"
-
+@dataclass
 class BinOp(ASTNode):
-    def __init__(self, left, op, right):
-        self.left = left
-        self.op = op
-        self.right = right
-    def __repr__(self):
-        return f"BinOp({self.left} {self.op} {self.right})"
+    left: ASTNode
+    op: str
+    right: ASTNode
+    lineno: int = 1
+    lexpos: int = 0
 
+@dataclass
+class UnaryOp(ASTNode):
+    op: str
+    operand: ASTNode
+    lineno: int = 1
+    lexpos: int = 0
+
+@dataclass
+class MatrixLiteral(ASTNode):
+    rows: List[List[ASTNode]]
+    lineno: int = 1
+    lexpos: int = 0
+
+@dataclass
 class Identifier(ASTNode):
-    def __init__(self, name):
-        self.name = name
-    def __repr__(self):
-        return f"ID({self.name})"
+    name: str
+    lineno: int = 1
+    lexpos: int = 0
 
+@dataclass
 class Number(ASTNode):
-    def __init__(self, value):
-        self.value = value
-    def __repr__(self):
-        return f"Num({self.value})"
+    value: Union[int, float]
+    lineno: int = 1
+    lexpos: int = 0
