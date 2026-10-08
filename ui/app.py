@@ -6,8 +6,10 @@ from core.lexer import lexer, reset_lexer
 from core.parser import parse_code
 import core.ast_nodes as ast
 from semantics.analyzer import SemanticAnalyzer
+from ir.tac_generator import generate as generate_tac
+from ir.optimizer import optimize as optimize_tac
 
-st.set_page_config(page_title="matrixForge Phase 1 Dashboard", layout="wide")
+st.set_page_config(page_title="MatrixForge Compiler Dashboard", layout="wide")
 
 # --- AST to Graphviz DOT Converter ---
 def generate_dot(node):
@@ -104,13 +106,13 @@ def render_vscode_snippet(source_code, lineno, col, offending_text):
     """
 
 # --- Layout ---
-st.title("matrixForge - Phase 1 Visualizer")
-st.caption("Pipeline: Lexical Analysis → Syntax Analysis (AST) → Semantic Analysis & Multi-Error Diagnostics")
+st.title("matrixForge - Phase 2 Compiler Visualizer")
+st.caption("Pipeline: Lexical → Syntax (AST) → Semantic Analysis → Linearized TAC IR → Multi-Pass Optimization")
 
-default_code = """matrix A = [[1, 2, 3], [4, 5, 6]];
-matrix B = [[1, 2], [3, 4], [5, 6]];
+default_code = """matrix A = [[1, 2], [3, 4]];
+matrix B = [[5, 6], [7, 8]];
 matrix C = -A * B;
-matrix D = -C + [[10, 20], [30, 40]];
+matrix D = -(-C);
 print(D);"""
 
 col1, col2 = st.columns([1, 1])
@@ -125,16 +127,18 @@ with col1:
             code_input = default_code
         else:
             code_input = uploaded_file.read().decode("utf-8")
-            st.text_area("File Contents:", code_input, height=200, disabled=True)
+            st.text_area("File Contents:", code_input, height=210, disabled=True)
     else:
-        code_input = st.text_area("Input matrixForge code:", default_code, height=200)
+        code_input = st.text_area("Input matrixForge code:", default_code, height=210)
 
-    compile_btn = st.button("Analyze Code", type="primary")
+    compile_btn = st.button("Compile & Optimize", type="primary")
 
 token_records = []
 tree = None
 all_errors = []
 analyzer = SemanticAnalyzer()
+raw_quads = []
+opt_result = None
 
 if compile_btn or code_input:
     # 1. Lexical Analysis
@@ -153,11 +157,16 @@ if compile_btn or code_input:
     tree, parse_errors = parse_code(code_input, lexer)
     all_errors.extend(parse_errors)
 
-    # 3. Semantic Analysis
-    if tree is not None:
+    # 3. Semantic Analysis (Strict Phase Gating)
+    if tree is not None and len(all_errors) == 0:
         analyzer.reset(source_code=code_input)
         analyzer.visit(tree)
         all_errors.extend(analyzer.errors)
+
+        # 4. Phase 2: IR Generation & Multi-Pass Optimization
+        if len(all_errors) == 0:
+            raw_quads = generate_tac(tree, analyzer.symtab)
+            opt_result = optimize_tac(raw_quads)
 
     with col2:
         st.subheader("Validation Status")
@@ -176,7 +185,6 @@ if compile_btn or code_input:
                 st.markdown(f"#### {i}. {err_badge} — `{err['message']}`")
                 st.info(f"💡 **Suggested Fix:** {err['suggestion']}")
                 
-                # Dynamic fallback: resolve line number if missing or invalid
                 line_no = err.get("line")
                 col_no = err.get("col", 1)
                 offending = err.get("offending", "")
@@ -193,13 +201,15 @@ if compile_btn or code_input:
                 st.markdown(render_vscode_snippet(code_input, line_no, col_no, offending), unsafe_allow_html=True)
                 st.divider()
         else:
-            st.success("✅ All checks passed: Grammar verified, unary ops evaluated, & matrix dimensions match.")
+            st.success("✅ Front-End Validated & Optimized Three-Address Code Generated.")
 
 # --- Inspection Tabs ---
-tab_tokens, tab_ast, tab_symtab = st.tabs([
+tab_tokens, tab_ast, tab_symtab, tab_raw_tac, tab_opt_tac = st.tabs([
     "1. Lexer Tokens", 
     "2. Abstract Syntax Tree", 
-    "3. Symbol Table"
+    "3. Symbol Table",
+    "4. Raw TAC (IR)",
+    "5. Optimized IR & Metrics"
 ])
 
 with tab_tokens:
@@ -240,3 +250,25 @@ with tab_symtab:
         st.dataframe(pd.DataFrame(table_rows), use_container_width=True)
     else:
         st.info("Symbol table empty (resolve errors to inspect full table).")
+
+with tab_raw_tac:
+    if raw_quads:
+        st.caption("Linearized Quadruples before optimization:")
+        tac_text = "\n".join([f"{i+1:02d} {str(q)}" for i, q in enumerate(raw_quads)])
+        st.code(tac_text, language="text")
+    else:
+        st.info("Raw TAC will appear here when input code passes semantic validation.")
+
+with tab_opt_tac:
+    if opt_result:
+        m_col1, m_col2, m_col3 = st.columns(3)
+        m_col1.metric("Raw Quadruples", opt_result.before_count)
+        m_col2.metric("Optimized Quadruples", opt_result.after_count)
+        m_col3.metric("Instruction Reduction", f"{opt_result.reduction_pct}%", delta=f"-{opt_result.before_count - opt_result.after_count} instructions", delta_color="inverse")
+        
+        st.divider()
+        st.caption("Optimized Quadruples after literal folding, double negation elimination, and dead code cleanup:")
+        opt_text = "\n".join([f"{i+1:02d} {str(q)}" for i, q in enumerate(opt_result.optimized_quads)])
+        st.code(opt_text, language="text")
+    else:
+        st.info("Optimized IR will appear here when input code passes semantic validation.")
