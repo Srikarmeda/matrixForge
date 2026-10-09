@@ -8,6 +8,7 @@ import core.ast_nodes as ast
 from semantics.analyzer import SemanticAnalyzer
 from ir.tac_generator import generate as generate_tac
 from ir.optimizer import optimize as optimize_tac
+from backend.runtime import MatrixVM
 
 st.set_page_config(page_title="MatrixForge Compiler Dashboard", layout="wide")
 
@@ -106,8 +107,8 @@ def render_vscode_snippet(source_code, lineno, col, offending_text):
     """
 
 # --- Layout ---
-st.title("matrixForge - Phase 2 Compiler Visualizer")
-st.caption("Pipeline: Lexical → Syntax (AST) → Semantic Analysis → Linearized TAC IR → Multi-Pass Optimization")
+st.title("MatrixForge Compiler Visualizer")
+st.caption("Pipeline: Lexical → Syntax (AST) → Semantic Analysis → Linearized TAC IR → Multi-Pass Optimization → Runtime Execution")
 
 default_code = """matrix A = [[1, 2], [3, 4]];
 matrix B = [[5, 6], [7, 8]];
@@ -204,12 +205,13 @@ if compile_btn or code_input:
             st.success("✅ Front-End Validated & Optimized Three-Address Code Generated.")
 
 # --- Inspection Tabs ---
-tab_tokens, tab_ast, tab_symtab, tab_raw_tac, tab_opt_tac = st.tabs([
+tab_tokens, tab_ast, tab_symtab, tab_raw_tac, tab_opt_tac, tab_runtime = st.tabs([
     "1. Lexer Tokens", 
     "2. Abstract Syntax Tree", 
     "3. Symbol Table",
     "4. Raw TAC (IR)",
-    "5. Optimized IR & Metrics"
+    "5. Optimized IR",
+    "6. Execution & Output"
 ])
 
 with tab_tokens:
@@ -272,3 +274,26 @@ with tab_opt_tac:
         st.code(opt_text, language="text")
     else:
         st.info("Optimized IR will appear here when input code passes semantic validation.")
+
+with tab_runtime:
+    if opt_result:
+        st.subheader("Target Runtime Engine (NumPy Backend)")
+        
+        # Instantiate VM and execute the Optimized TAC
+        vm = MatrixVM()
+        logs, exec_time = vm.execute(opt_result.optimized_quads)
+        
+        col_m1, col_m2 = st.columns(2)
+        col_m1.metric("Compilation Status", "Success")
+        col_m2.metric("Execution Time", f"{exec_time:.3f} ms")
+        
+        st.divider()
+        st.caption("Standard Output (STDOUT):")
+        if logs:
+            for log in logs:
+                st.code(log, language="text")
+        else:
+            st.info("Program executed successfully but produced no output. Add a print() statement.")
+            
+    else:
+        st.info("Runtime output will appear here when input code passes validation and optimization.")

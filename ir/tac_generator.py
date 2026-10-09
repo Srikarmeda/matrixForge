@@ -61,9 +61,12 @@ class TACGenerator:
         # 1. Allocate Matrix Buffer
         self.quads.append(Quadruple("ALLOC_MAT", rows, cols, temp))
         
-        # 2. Load literal data
-        flat_val = f"[[{node.rows[0][0].value},{node.rows[0][1].value}]..]" if rows > 0 and cols > 1 else "[...]"
-        self.quads.append(Quadruple("LOAD_LIT", flat_val, None, temp, dim_meta=(rows, cols)))
+        # 2. Extract actual numeric grid for backend execution
+        numeric_grid = []
+        for r in node.rows:
+            numeric_grid.append([float(elem.value) for elem in r])
+            
+        self.quads.append(Quadruple("LOAD_LIT", numeric_grid, None, temp, dim_meta=(rows, cols)))
         return temp
 
     def visit_UnaryOp(self, node: ast.UnaryOp):
